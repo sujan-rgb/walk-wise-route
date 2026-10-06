@@ -170,3 +170,10 @@
 .sr .st{font-size:12px;padding:2px 8px;border-radius:99px;border:1px solid var(--sr-ln)}.sr .st.verified{border-color:var(--sr-sf);color:var(--sr-sf)}.sr .st.rejected{color:var(--sr-mu);text-decoration:line-through}
 .sr .log{font-size:14px;max-height:220px;overflow:auto;padding-left:18px;list-style:disc}.sr details{margin:6px 0}.sr summary{cursor:pointer;font-weight:600}
 .sr ul,.sr ol{padding-left:20px}.sr ul{list-style:disc}.sr ol{list-style:decimal}
+.sr .live{border:2px solid var(--sr-wn);border-radius:10px;padding:10px 12px;margin:12px 0;background:color-mix(in oklab,var(--sr-wn) 8%,transparent)}
+.sr .live-top{display:flex;gap:8px;align-items:center;margin-bottom:6px}.sr .live-top .mu{margin-left:auto}
+.sr .clock{font-variant-numeric:tabular-nums;font-size:18px;color:var(--sr-ink)}
+.sr .dot{width:10px;height:10px;border-radius:50%;background:var(--sr-wn);animation:srpulse 1.2s infinite}
+@keyframes srpulse{50%{opacity:.25;transform:scale(1.4)}}
+.sr .stop{width:100%;font-size:17px;padding:12px}
+.sr .consent{align-items:flex-start;font-size:14px;margin:12px 0;padding:10px;border:1px dashed var(--sr-ln);border-radius:8px}

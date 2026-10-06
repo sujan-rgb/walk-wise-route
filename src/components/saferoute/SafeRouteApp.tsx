@@ -18,6 +18,12 @@ export function SafeRouteApp() {
   const [con, setCon] = useState<Record<string, boolean>>({ Mom: true, Riya: true, Warden: false });
   const [dur, setDur] = useState(60);
   const [walk, setWalk] = useState<{ k: RouteKey; p: number } | null>(null);
+  const [consent, setConsent] = useState(false);
+  const [expiresAt, setExpiresAt] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const [geo, setGeo] = useState<{ lat: number; lng: number; acc: number; at: number } | null>(null);
+  const [geoState, setGeoState] = useState<"off" | "asking" | "live" | "denied" | "unsupported">("off");
+  const watchId = useRef<number | null>(null);
   const [sos, setSos] = useState<null | { n: number } | { sent: true }>(null);
   const [log, setLog] = useState<string[]>([]);
   const [msg, setMsg] = useState("");
@@ -44,16 +50,37 @@ export function SafeRouteApp() {
     return () => clearInterval(iv);
   }, [walking]);
 
-  // Auto-stop sharing after the chosen time limit
-  const walkTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const clearGeo = () => {
+    if (watchId.current !== null && typeof navigator !== "undefined") navigator.geolocation.clearWatch(watchId.current);
+    watchId.current = null; setGeo(null); setGeoState("off");
+  };
   const startWalk = () => {
     if (!contacts.length) return setMsg("Pick at least one trusted contact first.");
-    setMsg(""); setWalk({ k: sel, p: 0 });
-    note(`Sharing live location with ${contacts.join(", ")} on the ${ROUTES[sel].n} route. Auto-stops in ${dur} min.`);
-    clearTimeout(walkTimer.current);
-    walkTimer.current = setTimeout(() => stopWalk("Time limit reached. Sharing stopped automatically."), dur * 60_000);
+    if (!consent) return setMsg("Please confirm consent before sharing your location.");
+    setMsg(""); setWalk({ k: sel, p: 0 }); setExpiresAt(Date.now() + dur * 60_000); setNow(Date.now());
+    note(`Sharing live location with ${contacts.join(", ")} on the ${ROUTES[sel].n} route. Session expires in ${dur} min.`);
+    if (!("geolocation" in navigator)) { setGeoState("unsupported"); return; }
+    setGeoState("asking");
+    watchId.current = navigator.geolocation.watchPosition(
+      (pos) => { setGeoState("live"); setGeo({ lat: pos.coords.latitude, lng: pos.coords.longitude, acc: Math.round(pos.coords.accuracy), at: Date.now() }); },
+      () => { setGeoState("denied"); note("Device location unavailable — using simulated route position."); },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 },
+    );
   };
-  const stopWalk = (m: string) => { clearTimeout(walkTimer.current); setWalk(null); note(m); };
+  const stopWalk = (m: string) => { clearGeo(); setWalk(null); setExpiresAt(null); setConsent(false); note(m); };
+
+  // Session clock: tick every second and auto-expire
+  useEffect(() => {
+    if (!expiresAt) return;
+    const iv = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(iv);
+  }, [expiresAt]);
+  useEffect(() => {
+    if (expiresAt && now >= expiresAt) stopWalk("Session expired. Sharing stopped automatically and location discarded.");
+  }, [now, expiresAt]);
+  useEffect(() => () => clearGeo(), []);
+  const remaining = expiresAt ? Math.max(0, expiresAt - now) : 0;
+  const mmss = `${String(Math.floor(remaining / 60000)).padStart(2, "0")}:${String(Math.floor((remaining % 60000) / 1000)).padStart(2, "0")}`;
 
   // SOS countdown
   const counting = sos !== null && "n" in sos;
@@ -94,6 +121,23 @@ export function SafeRouteApp() {
                 {[30, 60, 90].map((d) => <option key={d} value={d}>{d} minutes</option>)}
               </select>
               {msg && <p className="note">{msg}</p>}
+              {walk && (
+                <div className="live" role="status" aria-live="polite">
+                  <div className="live-top"><span className="dot" /> <b>Sharing live</b><span className="mu">Expires in <b className="clock">{mmss}</b></span></div>
+                  <div className="bar"><i style={{ width: `${(remaining / (dur * 60_000)) * 100}%`, background: "var(--sr-wn)" }} /></div>
+                  <p className="mu" style={{ margin: "6px 0" }}>
+                    {geoState === "live" && geo ? `Device location: ${geo.lat.toFixed(5)}, ${geo.lng.toFixed(5)} (±${geo.acc} m) · updated ${Math.max(0, Math.round((now - geo.at) / 1000))}s ago`
+                      : geoState === "asking" ? "Waiting for your browser's location permission…"
+                      : geoState === "denied" ? "Location permission denied — showing simulated position on the map."
+                      : geoState === "unsupported" ? "This device can't share location — showing simulated position." : ""}
+                  </p>
+                  <button className="btn d stop" onClick={() => stopWalk("You stopped sharing. Location is no longer visible and has been discarded.")}>Stop sharing now</button>
+                </div>
+              )}
+              {!walk && (
+                <label className="c consent"><input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
+                  <span>I agree to share my live location with the selected contacts for up to {dur} minutes. Sharing ends automatically, and I can stop it at any time. Location is never stored after the session.</span></label>
+              )}
               {walk ? (<>
                 <h3>Journey in progress ({ROUTES[walk.k].n} route) · {Math.round(walk.p * 100)}%</h3>
                 <div className="bar" role="progressbar" aria-valuenow={Math.round(walk.p * 100)} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${walk.p * 100}%` }} /></div>
@@ -101,9 +145,8 @@ export function SafeRouteApp() {
                   <button className="btn o" onClick={() => note("You checked in: all good.")}>Check in: I'm okay</button>
                   <button className="btn" onClick={() => stopWalk("Arrived safely. Contacts notified and sharing stopped.")}>Arrived safely</button>
                   <button className="btn o" onClick={() => note("Missed check-in. Contacts asked to call you; SOS suggested.")}>Simulate missed check-in</button>
-                  <button className="btn d" onClick={() => stopWalk("You stopped sharing. Location is no longer visible.")}>Stop sharing now</button>
                 </div>
-              </>) : <div className="row"><button className="btn" onClick={startWalk}>Start Safe Walk on {ROUTES[sel].n} route</button></div>}
+              </>) : <div className="row"><button className="btn" disabled={!consent} style={{ opacity: consent ? 1 : 0.5 }} onClick={startWalk}>Start Safe Walk on {ROUTES[sel].n} route</button></div>}
               <p className="mu">Privacy: location is shared only during this walk and is discarded when sharing stops.</p>
             </div>
             <div className="pn"><h2>What your contacts see</h2>
