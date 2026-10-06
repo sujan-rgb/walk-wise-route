@@ -177,3 +177,4 @@
 @keyframes srpulse{50%{opacity:.25;transform:scale(1.4)}}
 .sr .stop{width:100%;font-size:17px;padding:12px}
 .sr .consent{align-items:flex-start;font-size:14px;margin:12px 0;padding:10px;border:1px dashed var(--sr-ln);border-radius:8px}
+.sr .inp{font:inherit;padding:8px;border:1px solid var(--sr-ln);border-radius:8px;background:var(--sr-bg);color:var(--sr-ink);width:100%;margin-bottom:8px}

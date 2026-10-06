@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "@tanstack/react-router";
+import { supabase } from "@/integrations/supabase/client";
+import { useContacts, useIsModerator, useReports, useSession } from "./useLiveData";
 import {
-  CATEGORIES, HELP_POINTS, ROUTES, ROUTE_KEYS, SPEEDS, TIMES, minutes, pointAt, reportsLeft, sanitize, score,
+  CATEGORIES, HELP_POINTS, ROUTES, ROUTE_KEYS, SPEEDS, TIMES, minutes, pointAt, sanitize, score,
   type Category, type Mode, type Report, type RouteKey,
 } from "@/lib/saferoute";
 
@@ -15,7 +18,11 @@ export function SafeRouteApp() {
   const [mode, setMode] = useState<Mode>("Walking");
   const [sel, setSel] = useState<RouteKey>("safe");
   const [lay, setLay] = useState({ l: true, h: true, r: true });
-  const [con, setCon] = useState<Record<string, boolean>>({ Mom: true, Riya: true, Warden: false });
+  const { user } = useSession();
+  const isMod = useIsModerator(user);
+  const live = useReports(user);
+  const reps = live.reps;
+  const cts = useContacts(user);
   const [dur, setDur] = useState(60);
   const [walk, setWalk] = useState<{ k: RouteKey; p: number } | null>(null);
   const [consent, setConsent] = useState(false);
@@ -27,12 +34,7 @@ export function SafeRouteApp() {
   const [sos, setSos] = useState<null | { n: number } | { sent: true }>(null);
   const [log, setLog] = useState<string[]>([]);
   const [msg, setMsg] = useState("");
-  const [stamps, setStamps] = useState<number[]>([]);
-  const [reps, setReps] = useState<Report[]>([
-    { id: 1, cat: "Broken light", a: "fast", txt: "Two lamps out near Market lane", st: "verified" },
-    { id: 2, cat: "Unsafe path", a: "bal", txt: "Overgrown hedge blocks the view on Park road", st: "pending" },
-  ]);
-  const contacts = Object.keys(con).filter((k) => con[k]);
+  const contacts = cts.contacts.filter((c) => c.selected).map((c) => c.name);
   const note = (m: string) => setLog((l) => [`${stamp()} · ${m}`, ...l]);
 
   useEffect(() => { setDark(window.matchMedia("(prefers-color-scheme: dark)").matches); }, []);
@@ -100,7 +102,11 @@ export function SafeRouteApp() {
     <div className={`sr ${dark ? "sr-dark" : ""}`}>
       <header>
         <div><h1>SafeRoute</h1><p>The safest path, not just the shortest path. Sample campus data.</p></div>
-        <button className="chip" onClick={() => setDark((d) => !d)} aria-label="Toggle dark mode">{dark ? "Light" : "Dark"} mode</button>
+        <div className="row" style={{ margin: 0 }}>
+          {user ? (<><span className="mu" style={{ alignSelf: "center" }}>{user.email}{isMod ? " · moderator" : ""}</span><button className="chip" onClick={() => supabase.auth.signOut()}>Sign out</button></>)
+            : <Link to="/auth" className="chip">Sign in</Link>}
+          <button className="chip" onClick={() => setDark((d) => !d)} aria-label="Toggle dark mode">{dark ? "Light" : "Dark"} mode</button>
+        </div>
       </header>
       <nav aria-label="Sections">
         {TABS.map(([k, l]) => <button key={k} className={k === tab ? "on" : ""} aria-current={k === tab} onClick={() => go(k)}>{l}</button>)}
@@ -113,9 +119,7 @@ export function SafeRouteApp() {
               <h2>Safe Walk Mode</h2>
               <p className="mu">Tracking is opt-in, time-limited and easy to stop. Only the contacts you choose can see your journey.</p>
               <h3>Trusted contacts</h3>
-              {Object.keys(con).map((k) => (
-                <label key={k} className="c"><input type="checkbox" checked={con[k]} disabled={!!walk} onChange={(e) => setCon({ ...con, [k]: e.target.checked })} />{k}{k === "Warden" ? " (hostel warden)" : ""}</label>
-              ))}
+              {!user ? <p className="mu"><Link to="/auth">Sign in</Link> to manage your trusted contacts.</p> : <ContactsEditor cts={cts} locked={!!walk} />}
               <h3>Sharing time limit</h3>
               <select value={dur} disabled={!!walk} onChange={(e) => setDur(+e.target.value)} aria-label="Sharing time limit">
                 {[30, 60, 90].map((d) => <option key={d} value={d}>{d} minutes</option>)}
@@ -168,7 +172,7 @@ export function SafeRouteApp() {
               </>)}
           </div>
         )}
-        {tab === "rep" && <Reports reps={reps} setReps={setReps} stamps={stamps} setStamps={setStamps} msg={msg} setMsg={setMsg} />}
+        {tab === "rep" && <Reports reps={reps} live={live} signedIn={!!user} isMod={isMod} msg={msg} setMsg={setMsg} />}
         {tab === "ins" && <Insights reps={reps} />}
         {tab === "about" && <About />}
       </main>
@@ -232,25 +236,45 @@ function Plan(p: {
   );
 }
 
-function Reports({ reps, setReps, stamps, setStamps, msg, setMsg }: { reps: Report[]; setReps: (f: (r: Report[]) => Report[]) => void; stamps: number[]; setStamps: (s: number[]) => void; msg: string; setMsg: (s: string) => void }) {
+function ContactsEditor({ cts, locked }: { cts: ReturnType<typeof useContacts>; locked: boolean }) {
+  const [name, setName] = useState(""); const [rel, setRel] = useState("");
+  return (<>
+    {cts.contacts.map((c) => (
+      <div key={c.id} className="row" style={{ margin: "2px 0", alignItems: "center" }}>
+        <label className="c" style={{ flex: 1 }}><input type="checkbox" checked={c.selected} disabled={locked} onChange={() => cts.toggle(c)} />{c.name}{c.relation ? ` (${c.relation})` : ""}</label>
+        {!locked && <button className="chip" aria-label={`Remove ${c.name}`} onClick={() => cts.remove(c.id)}>Remove</button>}
+      </div>
+    ))}
+    {!cts.contacts.length && <p className="mu">No contacts yet — add one below.</p>}
+    {!locked && <form className="row" onSubmit={(e) => { e.preventDefault(); const n = sanitize(name).slice(0, 40); if (!n) return; cts.add(n, sanitize(rel).slice(0, 40)); setName(""); setRel(""); }}>
+      <input className="inp" style={{ flex: 2, margin: 0 }} placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} maxLength={40} aria-label="Contact name" />
+      <input className="inp" style={{ flex: 2, margin: 0 }} placeholder="Relation (optional)" value={rel} onChange={(e) => setRel(e.target.value)} maxLength={40} aria-label="Relation" />
+      <button className="btn o">Add</button>
+    </form>}
+  </>);
+}
+
+function Reports({ reps, live, signedIn, isMod, msg, setMsg }: { reps: Report[]; live: ReturnType<typeof useReports>; signedIn: boolean; isMod: boolean; msg: string; setMsg: (s: string) => void }) {
   const [cat, setCat] = useState<Category>(CATEGORIES[0]);
   const [area, setArea] = useState<RouteKey>("fast");
   const [txt, setTxt] = useState("");
-  const left = reportsLeft(stamps, Date.now());
-  const submit = () => {
+  const [busy, setBusy] = useState(false);
+  const left = live.left;
+  const submit = async () => {
     const clean = sanitize(txt);
     if (!clean) return setMsg("Add a short description first.");
     if (left < 1) return setMsg("Rate limit reached. Try again in an hour.");
-    setStamps([...stamps, Date.now()]);
-    setReps((r) => [...r, { id: Date.now(), cat, a: area, txt: clean, st: "pending" }]);
-    setTxt(""); setMsg("Report submitted for moderation. It will count toward scores once verified.");
+    setBusy(true); const err = await live.submit(cat, area, clean); setBusy(false);
+    if (err) return setMsg(err);
+    setTxt(""); setMsg("Report submitted for moderation. Everyone sees it instantly; it counts toward scores once verified.");
   };
-  const setSt = (id: number, st: Report["st"]) => setReps((r) => r.map((x) => (x.id === id ? { ...x, st } : x)));
+  const setSt = async (id: string, st: "verified" | "rejected") => { const e = await live.moderate(id, st); if (e) setMsg(e); };
   return (
     <div className="g">
       <div className="pn">
         <h2>Report a concern</h2>
-        <p className="mu">Reports are moderated before they affect route scores. Rate limit: {left} of 3 reports left this hour.</p>
+        <p className="mu">Reports are moderated before they affect route scores, and sync live across devices. {signedIn ? `Rate limit: ${left} of 3 reports left this hour.` : ""}</p>
+        {!signedIn && <p className="note"><Link to="/auth">Sign in</Link> to submit a report.</p>}
         <label htmlFor="rc">Type</label>
         <select id="rc" value={cat} onChange={(e) => setCat(e.target.value as Category)}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select>
         <label htmlFor="ra">Where</label>
@@ -258,7 +282,7 @@ function Reports({ reps, setReps, stamps, setStamps, msg, setMsg }: { reps: Repo
         <label htmlFor="rt">Details</label>
         <textarea id="rt" rows={3} maxLength={140} value={txt} onChange={(e) => setTxt(e.target.value)} placeholder="What did you see?" />
         <span className="mu">{txt.length}/140</span>
-        <div className="row"><button className="btn" onClick={submit}>Submit report</button></div>
+        <div className="row"><button className="btn" disabled={!signedIn || busy} style={{ opacity: signedIn ? 1 : 0.5 }} onClick={submit}>{busy ? "Submitting…" : "Submit report"}</button></div>
         {msg && <p className="note" role="status">{msg}</p>}
       </div>
       <div className="pn">
@@ -266,9 +290,10 @@ function Reports({ reps, setReps, stamps, setStamps, msg, setMsg }: { reps: Repo
         {reps.map((x) => (
           <div key={x.id} style={{ padding: "8px 0", borderTop: "1px solid var(--sr-ln)" }}>
             <span className={`st ${x.st}`}>{x.st}</span> <b>{x.cat}</b> on {ROUTES[x.a].a}<br /><span className="mu">{x.txt}</span>
-            {x.st === "pending" && <div className="row"><button className="btn" onClick={() => setSt(x.id, "verified")}>Moderator: verify</button><button className="btn o" onClick={() => setSt(x.id, "rejected")}>Reject</button></div>}
+            {x.st === "pending" && isMod && <div className="row"><button className="btn" onClick={() => setSt(x.id, "verified")}>Moderator: verify</button><button className="btn o" onClick={() => setSt(x.id, "rejected")}>Reject</button></div>}
           </div>
         ))}
+        {!isMod && <p className="mu">Only moderators can verify or reject reports.</p>}
         <p className="mu">Verify a report, then open Plan route: that route's score drops and a red marker appears.</p>
       </div>
     </div>

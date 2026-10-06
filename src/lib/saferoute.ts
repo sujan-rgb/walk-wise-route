@@ -3,7 +3,7 @@ export type Mode = "Walking" | "Cycling" | "Campus ride";
 export type ReportStatus = "pending" | "verified" | "rejected";
 export const CATEGORIES = ["Broken light", "Unsafe path", "Harassment concern", "Hazard"] as const;
 export type Category = (typeof CATEGORIES)[number];
-export interface Report { id: number; cat: Category; a: RouteKey; txt: string; st: ReportStatus }
+export interface Report { id: string; cat: Category; a: RouteKey; txt: string; st: ReportStatus }
 
 export interface RouteDef {
   n: string; c: string; stroke: string; km: number; a: string;
