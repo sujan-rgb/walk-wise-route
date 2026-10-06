@@ -27,13 +27,13 @@ export const REPORT_WINDOW_MS = 60 * 60 * 1000;
 export const REPORT_PENALTY = 8;
 
 export function score(k: RouteKey, t: number, reports: Report[]) {
-  const f = ROUTES[k].f, w = WEIGHTS[t];
+  const f = ROUTES[k].f, w = WEIGHTS[t] ?? WEIGHTS[0]!;
   const v = reports.filter((x) => x.a === k && x.st === "verified").length;
   const P: [string, number][] = [
-    ["Lighting", f.l[t]], ["Active public places", f.a[t]], ["Help points nearby", f.h[t]],
+    ["Lighting", f.l[t] ?? 0], ["Active public places", f.a[t] ?? 0], ["Help points nearby", f.h[t] ?? 0],
     ["Verified reports", Math.max(0, f.r - REPORT_PENALTY * v)],
   ];
-  return { s: Math.round(P.reduce((a, p, i) => a + p[1] * w[i], 0)), P, v };
+  return { s: Math.round(P.reduce((a, p, i) => a + p[1] * (w[i] ?? 0), 0)), P, v };
 }
 
 export const minutes = (k: RouteKey, m: Mode) => Math.max(1, Math.round((ROUTES[k].km / SPEEDS[m]) * 60));
@@ -45,13 +45,16 @@ export function reportsLeft(stamps: number[], now: number) {
 
 export const sanitize = (s: string) => s.replace(/[<>&"'`]/g, "").trim().slice(0, 140);
 
-export function pointAt(p: [number, number][], t: number): [number, number] {
+export function pointAt(pts: [number, number][], t: number): [number, number] {
+  const p = pts as [number, number][];
+  const at = (i: number) => p[i]!;
   const L: number[] = []; let T = 0;
-  for (let i = 1; i < p.length; i++) { const d = Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]); L.push(d); T += d; }
+  for (let i = 1; i < p.length; i++) { const d = Math.hypot(at(i)[0] - at(i - 1)[0], at(i)[1] - at(i - 1)[1]); L.push(d); T += d; }
   let x = t * T;
   for (let i = 0; i < L.length; i++) {
-    if (x <= L[i] || i === L.length - 1) { const u = Math.min(1, x / L[i]); return [p[i][0] + (p[i + 1][0] - p[i][0]) * u, p[i][1] + (p[i + 1][1] - p[i][1]) * u]; }
-    x -= L[i];
+    const li = L[i]!;
+    if (x <= li || i === L.length - 1) { const u = Math.min(1, x / li); return [at(i)[0] + (at(i + 1)[0] - at(i)[0]) * u, at(i)[1] + (at(i + 1)[1] - at(i)[1]) * u]; }
+    x -= li;
   }
-  return p[p.length - 1];
+  return at(p.length - 1);
 }

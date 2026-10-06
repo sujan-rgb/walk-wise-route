@@ -4,8 +4,8 @@ import { score, reportsLeft, minutes, sanitize, type Report } from "./saferoute"
 describe("SafeRoute rules", () => {
   it("each verified report lowers its route's report factor by 8", () => {
     const r: Report[] = [{ id: 1, cat: "Hazard", a: "fast", txt: "x", st: "verified" }];
-    expect(score("fast", 0, []).P[3][1]).toBe(62);
-    expect(score("fast", 0, r).P[3][1]).toBe(54);
+    expect(score("fast", 0, []).P[3]![1]).toBe(62);
+    expect(score("fast", 0, r).P[3]![1]).toBe(54);
   });
   it("pending reports do not affect score", () => {
     const r: Report[] = [{ id: 1, cat: "Hazard", a: "fast", txt: "x", st: "pending" }];

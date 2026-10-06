@@ -45,7 +45,7 @@ export function SafeRouteApp() {
   }, [walking]);
 
   // Auto-stop sharing after the chosen time limit
-  const walkTimer = useRef<ReturnType<typeof setTimeout>>();
+  const walkTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const startWalk = () => {
     if (!contacts.length) return setMsg("Pick at least one trusted contact first.");
     setMsg(""); setWalk({ k: sel, p: 0 });
@@ -140,7 +140,7 @@ function MapView({ t, sel, lay, reps, walk }: { t: number; sel: RouteKey; lay: {
       {[1, 2, 3, 4, 5].map((i) => <path key={i} d={`M${i * 100} 0V380M0 ${i * 63}H600`} stroke="var(--sr-grid)" strokeWidth="2" />)}
       {ROUTE_KEYS.map((k) => <polyline key={k} points={ROUTES[k].p.join(" ")} fill="none" stroke={ROUTES[k].stroke} strokeWidth={k === sel ? 7 : 4} strokeLinecap="round" strokeLinejoin="round" opacity={k === sel ? 1 : 0.35} />)}
       {lay.l && ROUTE_KEYS.flatMap((k) => {
-        const n = Math.round(ROUTES[k].f.l[t] / 14);
+        const n = Math.round((ROUTES[k].f.l[t] ?? 0) / 14);
         return Array.from({ length: n }, (_, i) => { const q = pointAt(ROUTES[k].p, (i + 1) / (n + 1)); return <circle key={k + i} cx={q[0]} cy={q[1] - 9} r="3.5" fill="var(--sr-lp)" />; });
       })}
       {lay.h && HELP_POINTS.map(([x, y, n], i) => (
