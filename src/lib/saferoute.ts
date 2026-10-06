@@ -12,9 +12,9 @@ export interface RouteDef {
 }
 
 export const ROUTES: Record<RouteKey, RouteDef> = {
-  fast: { n: "Fastest", c: "var(--sr-fs)", stroke: "var(--sr-fs)", km: 1.2, a: "Market lane", p: [[50, 320], [200, 240], [360, 150], [550, 60]], f: { l: [78, 52, 28], a: [70, 48, 22], h: [40, 40, 40], r: 62 } },
-  bal: { n: "Balanced", c: "var(--sr-bl)", stroke: "var(--sr-bl)", km: 1.4, a: "Park road", p: [[50, 320], [130, 200], [330, 180], [450, 110], [550, 60]], f: { l: [85, 72, 58], a: [75, 65, 50], h: [60, 60, 60], r: 80 } },
-  safe: { n: "Safest", c: "var(--sr-sf)", stroke: "var(--sr-sf)", km: 1.7, a: "Main avenue", p: [[50, 320], [70, 150], [210, 85], [420, 70], [550, 60]], f: { l: [92, 88, 84], a: [78, 74, 66], h: [82, 82, 82], r: 90 } },
+  fast: { n: "Fastest", c: "var(--sr-fs)", stroke: "var(--sr-m-fs)", km: 1.2, a: "Market lane", p: [[50, 320], [200, 240], [360, 150], [550, 60]], f: { l: [78, 52, 28], a: [70, 48, 22], h: [40, 40, 40], r: 62 } },
+  bal: { n: "Balanced", c: "var(--sr-bl)", stroke: "var(--sr-m-bl)", km: 1.4, a: "Park road", p: [[50, 320], [130, 200], [330, 180], [450, 110], [550, 60]], f: { l: [85, 72, 58], a: [75, 65, 50], h: [60, 60, 60], r: 80 } },
+  safe: { n: "Safest", c: "var(--sr-sf)", stroke: "var(--sr-m-sf)", km: 1.7, a: "Main avenue", p: [[50, 320], [70, 150], [210, 85], [420, 70], [550, 60]], f: { l: [92, 88, 84], a: [78, 74, 66], h: [82, 82, 82], r: 90 } },
 };
 export const ROUTE_KEYS = Object.keys(ROUTES) as RouteKey[];
 /** Weights per time of day: [lighting, active places, help points, verified reports] */
