@@ -20,6 +20,6 @@ describe("SafeRoute rules", () => {
     expect(reportsLeft([now - 1, now - 2, now - 3], now)).toBe(0);
     expect(reportsLeft([now - 3_600_001, now - 1], now)).toBe(2);
   });
-  it("walking 1.2 km takes 14 min", () => expect(minutes("fast", "Walking")).toBe(14));
+  it("walking 3.9 km takes 47 min", () => expect(minutes("fast", "Walking")).toBe(47));
   it("strips markup from report text", () => expect(sanitize("<b>hi</b>")).toBe("bhi/b"));
 });

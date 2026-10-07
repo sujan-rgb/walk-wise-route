@@ -196,7 +196,7 @@ function Plan(p: {
       </div>
       <div className="pn">
         <h2>Central Library to Hostel Block C</h2>
-        <p className="mu" style={{ marginTop: -6 }}>Cubbon Park area, Bengaluru · tap a route line to select it</p>
+        <p className="mu" style={{ marginTop: -6 }}>Cubbon Park to Ulsoor, Bengaluru · tap a route line to select it</p>
         <div className="row" role="group" aria-label="Travel mode">{(Object.keys(SPEEDS) as Mode[]).map((m) => <button key={m} className={`chip ${m === p.mode ? "on" : ""}`} aria-pressed={m === p.mode} onClick={() => p.setMode(m)}>{m}</button>)}</div>
         <div className="row" role="group" aria-label="Time of day">{TIMES.map((x, i) => <button key={x} className={`chip ${i === p.t ? "on" : ""}`} aria-pressed={i === p.t} onClick={() => p.setT(i)}>{x}</button>)}</div>
         {ROUTE_KEYS.map((k) => (
