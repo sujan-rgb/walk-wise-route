@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { BengaluruMap } from "./BengaluruMap";
 import { useContacts, useIsModerator, useReports, useSession } from "./useLiveData";
 import {
-  CATEGORIES, HELP_POINTS, ROUTES, ROUTE_KEYS, SPEEDS, TIMES, minutes, pointAt, sanitize, score,
+  CATEGORIES, ROUTES, ROUTE_KEYS, SPEEDS, TIMES, minutes, sanitize, score,
   type Category, type Mode, type Report, type RouteKey,
 } from "@/lib/saferoute";
 
