@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
+import { BengaluruMap } from "./BengaluruMap";
 import { useContacts, useIsModerator, useReports, useSession } from "./useLiveData";
 import {
-  CATEGORIES, HELP_POINTS, ROUTES, ROUTE_KEYS, SPEEDS, TIMES, minutes, pointAt, sanitize, score,
+  CATEGORIES, ROUTES, ROUTE_KEYS, SPEEDS, TIMES, minutes, sanitize, score,
   type Category, type Mode, type Report, type RouteKey,
 } from "@/lib/saferoute";
 
@@ -180,30 +181,6 @@ export function SafeRouteApp() {
   );
 }
 
-function MapView({ t, sel, lay, reps, walk }: { t: number; sel: RouteKey; lay: { l: boolean; h: boolean; r: boolean }; reps: Report[]; walk: { k: RouteKey; p: number } | null }) {
-  return (
-    <svg viewBox="0 0 600 380" role="img" aria-label="Campus map with three route options">
-      <rect width="600" height="380" fill="var(--sr-map)" />
-      {[1, 2, 3, 4, 5].map((i) => <path key={i} d={`M${i * 100} 0V380M0 ${i * 63}H600`} stroke="var(--sr-grid)" strokeWidth="2" />)}
-      {ROUTE_KEYS.map((k) => <polyline key={k} points={ROUTES[k].p.join(" ")} fill="none" stroke={ROUTES[k].stroke} strokeWidth={k === sel ? 7 : 4} strokeLinecap="round" strokeLinejoin="round" opacity={k === sel ? 1 : 0.35} />)}
-      {lay.l && ROUTE_KEYS.flatMap((k) => {
-        const n = Math.round((ROUTES[k].f.l[t] ?? 0) / 14);
-        return Array.from({ length: n }, (_, i) => { const q = pointAt(ROUTES[k].p, (i + 1) / (n + 1)); return <circle key={k + i} cx={q[0]} cy={q[1] - 9} r="3.5" fill="var(--sr-lp)" />; });
-      })}
-      {lay.h && HELP_POINTS.map(([x, y, n], i) => (
-        <g key={i}><title>{n}</title><rect x={x - 8} y={y - 8} width="16" height="16" rx="3" fill="var(--sr-help)" /><path d={`M${x} ${y - 5}v10M${x - 5} ${y}h10`} stroke="var(--sr-on)" strokeWidth="2.5" /></g>
-      ))}
-      {lay.r && reps.filter((x) => x.st === "verified").map((x, i) => {
-        const q = pointAt(ROUTES[x.a].p, 0.35 + 0.1 * (i % 4));
-        return <g key={x.id}><title>{x.txt}</title><path d={`M${q[0]} ${q[1] + 14}l-11 -20h22z`} fill="var(--sr-alert)" /><text x={q[0]} y={q[1] + 11} fontSize="11" fill="var(--sr-on)" textAnchor="middle" fontWeight="800">!</text></g>;
-      })}
-      <circle cx="50" cy="320" r="9" fill="var(--sr-on)" /><text x="64" y="336" fill="var(--sr-on)" fontSize="13">Central Library</text>
-      <circle cx="550" cy="60" r="9" fill="var(--sr-on)" /><text x="548" y="44" fill="var(--sr-on)" fontSize="13" textAnchor="end">Hostel Block C</text>
-      {walk && (() => { const q = pointAt(ROUTES[walk.k].p, walk.p); return <circle cx={q[0]} cy={q[1]} r="9" fill="var(--sr-lp)" stroke="var(--sr-on)" strokeWidth="3" />; })()}
-    </svg>
-  );
-}
-
 function Plan(p: {
   t: number; setT: (n: number) => void; mode: Mode; setMode: (m: Mode) => void; sel: RouteKey; setSel: (k: RouteKey) => void;
   lay: { l: boolean; h: boolean; r: boolean }; setLay: (l: { l: boolean; h: boolean; r: boolean }) => void; reps: Report[]; walk: { k: RouteKey; p: number } | null; onWalk: () => void;
@@ -214,11 +191,12 @@ function Plan(p: {
   return (
     <div className="g">
       <div className="pn">
-        <MapView t={p.t} sel={p.sel} lay={p.lay} reps={p.reps} walk={p.walk} />
+        <BengaluruMap t={p.t} sel={p.sel} lay={p.lay} reps={p.reps} walk={p.walk} onSelect={p.setSel} />
         <div className="row">{layers.map(([k, l]) => <label key={k} className="c"><input type="checkbox" checked={p.lay[k]} onChange={(e) => p.setLay({ ...p.lay, [k]: e.target.checked })} />{l}</label>)}</div>
       </div>
       <div className="pn">
         <h2>Central Library to Hostel Block C</h2>
+        <p className="mu" style={{ marginTop: -6 }}>Cubbon Park area, Bengaluru · tap a route line to select it</p>
         <div className="row" role="group" aria-label="Travel mode">{(Object.keys(SPEEDS) as Mode[]).map((m) => <button key={m} className={`chip ${m === p.mode ? "on" : ""}`} aria-pressed={m === p.mode} onClick={() => p.setMode(m)}>{m}</button>)}</div>
         <div className="row" role="group" aria-label="Time of day">{TIMES.map((x, i) => <button key={x} className={`chip ${i === p.t ? "on" : ""}`} aria-pressed={i === p.t} onClick={() => p.setT(i)}>{x}</button>)}</div>
         {ROUTE_KEYS.map((k) => (
