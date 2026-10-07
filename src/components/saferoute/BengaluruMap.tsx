@@ -4,8 +4,7 @@ import { HELP_POINTS, ROUTES, ROUTE_KEYS, pointAt, type Report, type RouteKey } 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 declare global { interface Window { __srMapsReady?: () => void; google?: any } }
 
-/** Projects the prototype's 600x380 sample grid onto central Bengaluru (Cubbon Park → MG Road area). */
-export const toLatLng = ([x, y]: [number, number]) => ({ lat: 12.985 - (y / 380) * 0.015, lng: 77.59 + (x / 600) * 0.02 });
+export const toLatLng = ([lat, lng]: [number, number]) => ({ lat, lng });
 
 let loader: Promise<void> | null = null;
 function loadMaps(): Promise<void> {
@@ -41,7 +40,7 @@ export function BengaluruMap({ t, sel, lay, reps, walk, onSelect }: {
       if (!alive || !el.current) return;
       const g = window.google.maps;
       map.current = new g.Map(el.current, {
-        center: toLatLng([300, 190]), zoom: 15, clickableIcons: false, mapTypeControl: false, streetViewControl: false,
+        center: { lat: 12.978, lng: 77.607 }, zoom: 15, clickableIcons: false, mapTypeControl: false, streetViewControl: false,
         styles: [{ featureType: "poi", stylers: [{ visibility: "off" }] }],
       });
       setReady(true);
@@ -61,15 +60,15 @@ export function BengaluruMap({ t, sel, lay, reps, walk, onSelect }: {
       line.addListener("click", () => onSelect(k)); add(line);
       if (lay.l) {
         const n = Math.round((ROUTES[k].f.l[t] ?? 0) / 14);
-        for (let i = 1; i <= n; i++) add(new g.Circle({ map: m, center: toLatLng(pointAt(ROUTES[k].p, i / (n + 1))), radius: 14, fillColor: "#f2b84b", fillOpacity: 0.95, strokeWeight: 0, zIndex: 4 }));
+        for (let i = 1; i <= n; i++) add(new g.Circle({ map: m, center: toLatLng(pointAt(ROUTES[k].p, i / (n + 1))), radius: 22, fillColor: "#f2b84b", fillOpacity: 0.95, strokeWeight: 0, zIndex: 4 }));
       }
     });
     if (lay.h) HELP_POINTS.forEach(([x, y, name]) => add(new g.Marker({ map: m, position: toLatLng([x, y]), title: name, label: { text: "+", color: "#fff", fontWeight: "800" },
       icon: { path: g.SymbolPath.CIRCLE, scale: 10, fillColor: "#2f6fed", fillOpacity: 1, strokeColor: "#fff", strokeWeight: 2 } })));
     if (lay.r) reps.filter((x) => x.st === "verified").forEach((x, i) => add(new g.Marker({ map: m, position: toLatLng(pointAt(ROUTES[x.a].p, 0.35 + 0.1 * (i % 4))), title: `${x.cat}: ${x.txt}`,
       label: { text: "!", color: "#fff", fontWeight: "800" }, icon: { path: g.SymbolPath.BACKWARD_CLOSED_ARROW, scale: 7, fillColor: "#ef4444", fillOpacity: 1, strokeColor: "#fff", strokeWeight: 1 } })));
-    add(new g.Marker({ map: m, position: toLatLng([50, 320]), title: "State Central Library, Cubbon Park", label: { text: "Central Library", fontWeight: "700" } }));
-    add(new g.Marker({ map: m, position: toLatLng([550, 60]), title: "Hostel Block C", label: { text: "Hostel Block C", fontWeight: "700" } }));
+    add(new g.Marker({ map: m, position: toLatLng(ROUTES.fast.p[0]!), title: "State Central Library, Cubbon Park", label: { text: "Central Library", fontWeight: "700" } }));
+    add(new g.Marker({ map: m, position: toLatLng(ROUTES.fast.p[ROUTES.fast.p.length - 1]!), title: "Hostel Block C, Ulsoor", label: { text: "Hostel Block C", fontWeight: "700" } }));
   }, [ready, t, sel, lay, reps, onSelect]);
 
   // Live Safe Walk position
