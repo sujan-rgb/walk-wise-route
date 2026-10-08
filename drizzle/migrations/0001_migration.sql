@@ -1,0 +1,1 @@
+alter table public.trusted_contacts add column phone text check (phone is null or phone ~ '^\+?[0-9 ()-]{6,20}$');

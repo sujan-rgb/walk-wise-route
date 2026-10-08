@@ -70,6 +70,7 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          phone: string | null
           relation: string | null
           selected: boolean
           user_id: string
@@ -78,6 +79,7 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          phone?: string | null
           relation?: string | null
           selected?: boolean
           user_id?: string
@@ -86,6 +88,7 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          phone?: string | null
           relation?: string | null
           selected?: boolean
           user_id?: string
