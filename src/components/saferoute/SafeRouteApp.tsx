@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { BengaluruMap } from "./BengaluruMap";
+import { useServerFn } from "@tanstack/react-start";
+import { planTrip } from "@/lib/routing.functions";
 import { useContacts, useIsModerator, useReports, useSession } from "./useLiveData";
 import {
-  CATEGORIES, ROUTES, ROUTE_KEYS, SPEEDS, TIMES, minutes, sanitize, score,
+  CATEGORIES, TRIP, applyRoutes, ROUTES, ROUTE_KEYS, SPEEDS, TIMES, minutes, sanitize, score,
   type Category, type Mode, type Report, type RouteKey,
 } from "@/lib/saferoute";
 
@@ -35,7 +37,10 @@ export function SafeRouteApp() {
   const [sos, setSos] = useState<null | { n: number } | { sent: true }>(null);
   const [log, setLog] = useState<string[]>([]);
   const [msg, setMsg] = useState("");
-  const contacts = cts.contacts.filter((c) => c.selected).map((c) => c.name);
+  const [ver, setVer] = useState(0);
+  const [here, setHere] = useState<{ lat: number; lng: number } | null>(null);
+  const picked = cts.contacts.filter((c) => c.selected);
+  const contacts = picked.map((c) => c.name);
   const note = (m: string) => setLog((l) => [`${stamp()} · ${m}`, ...l]);
 
   useEffect(() => { setDark(window.matchMedia("(prefers-color-scheme: dark)").matches); }, []);
@@ -113,7 +118,7 @@ export function SafeRouteApp() {
         {TABS.map(([k, l]) => <button key={k} className={k === tab ? "on" : ""} aria-current={k === tab} onClick={() => go(k)}>{l}</button>)}
       </nav>
       <main>
-        {tab === "plan" && <Plan {...{ t, setT, mode, setMode, sel, setSel, lay, setLay, reps, walk }} onWalk={() => go("walk")} />}
+        {tab === "plan" && <Plan {...{ t, setT, mode, setMode, sel, setSel, lay, setLay, reps, walk, ver, signedIn: !!user }} onPlanned={() => setVer((v) => v + 1)} onWalk={() => go("walk")} />}
         {tab === "walk" && (
           <div className="g">
             <div className="pn">
@@ -151,6 +156,7 @@ export function SafeRouteApp() {
                   <button className="btn" onClick={() => stopWalk("Arrived safely. Contacts notified and sharing stopped.")}>Arrived safely</button>
                   <button className="btn o" onClick={() => note("Missed check-in. Contacts asked to call you; SOS suggested.")}>Simulate missed check-in</button>
                 </div>
+                <DistressLinks contacts={picked} where={geo} />
               </>) : <div className="row"><button className="btn" disabled={!consent} style={{ opacity: consent ? 1 : 0.5 }} onClick={startWalk}>Start Safe Walk on {ROUTES[sel].n} route</button></div>}
               <p className="mu">Privacy: location is shared only during this walk and is discarded when sharing stops.</p>
             </div>
@@ -163,10 +169,12 @@ export function SafeRouteApp() {
           <div className="pn" style={{ maxWidth: 560, margin: "auto", textAlign: "center" }}>
             <h2>SOS support</h2>
             <p className="mu">Sends an alert and live location to your chosen contacts ({contacts.join(", ") || "none selected"}) and campus security.</p>
-            {!sos ? (<><button className="sos" onClick={() => setSos({ n: 5 })}>SOS</button><p className="mu">A 5-second countdown lets you cancel accidental taps.</p></>)
+            {!sos ? (<><button className="sos" onClick={() => { setSos({ n: 5 }); navigator.geolocation?.getCurrentPosition((p) => setHere({ lat: p.coords.latitude, lng: p.coords.longitude }), () => {}); }}>SOS</button><p className="mu">A 5-second countdown lets you cancel accidental taps.</p></>)
               : "sent" in sos ? (<>
                 <div className="note" style={{ textAlign: "left" }} role="alert"><b>Alert sent.</b> Contacts and campus security can see your live location.<br />If you are in danger, call your local emergency number now (112 in India). Move toward the nearest lit, staffed place or help point.</div>
-                <button className="btn d" onClick={() => { setSos(null); note("SOS ended. Location sharing stopped."); }}>Stop sharing and end SOS</button>
+                <a className="btn d call112" href="tel:112">Call 112 now (emergency)</a>
+                <DistressLinks contacts={picked} where={here ?? geo} />
+                <button className="btn o" onClick={() => { setSos(null); note("SOS ended. Location sharing stopped."); }}>Stop sharing and end SOS</button>
               </>) : (<>
                 <button className="sos" disabled aria-live="assertive">{sos.n}</button>
                 <button className="btn o" onClick={() => setSos(null)}>Cancel alert</button>
@@ -184,19 +192,22 @@ export function SafeRouteApp() {
 function Plan(p: {
   t: number; setT: (n: number) => void; mode: Mode; setMode: (m: Mode) => void; sel: RouteKey; setSel: (k: RouteKey) => void;
   lay: { l: boolean; h: boolean; r: boolean }; setLay: (l: { l: boolean; h: boolean; r: boolean }) => void; reps: Report[]; walk: { k: RouteKey; p: number } | null; onWalk: () => void;
+  ver: number; signedIn: boolean; onPlanned: () => void;
 }) {
   const q = score(p.sel, p.t, p.reps);
   const weak = q.P.reduce((a, b) => (b[1] < a[1] ? b : a));
   const layers: ["l" | "h" | "r", string][] = [["l", "Lighting"], ["h", "Help points"], ["r", "Verified reports"]];
   return (
+    <>
+    <TripBar signedIn={p.signedIn} onPlanned={p.onPlanned} />
     <div className="g">
       <div className="pn">
-        <BengaluruMap t={p.t} sel={p.sel} lay={p.lay} reps={p.reps} walk={p.walk} onSelect={p.setSel} />
+        <BengaluruMap t={p.t} sel={p.sel} lay={p.lay} reps={p.reps} walk={p.walk} onSelect={p.setSel} ver={p.ver} />
         <div className="row">{layers.map(([k, l]) => <label key={k} className="c"><input type="checkbox" checked={p.lay[k]} onChange={(e) => p.setLay({ ...p.lay, [k]: e.target.checked })} />{l}</label>)}</div>
       </div>
       <div className="pn">
-        <h2>Central Library to Hostel Block C</h2>
-        <p className="mu" style={{ marginTop: -6 }}>Cubbon Park to Ulsoor, Bengaluru · tap a route line to select it</p>
+        <h2>{TRIP.from.split(",")[0]} to {TRIP.to.split(",")[0]}</h2>
+        <p className="mu" style={{ marginTop: -6 }}>Tap a route line on the map to select it</p>
         <div className="row" role="group" aria-label="Travel mode">{(Object.keys(SPEEDS) as Mode[]).map((m) => <button key={m} className={`chip ${m === p.mode ? "on" : ""}`} aria-pressed={m === p.mode} onClick={() => p.setMode(m)}>{m}</button>)}</div>
         <div className="row" role="group" aria-label="Time of day">{TIMES.map((x, i) => <button key={x} className={`chip ${i === p.t ? "on" : ""}`} aria-pressed={i === p.t} onClick={() => p.setT(i)}>{x}</button>)}</div>
         {ROUTE_KEYS.map((k) => (
@@ -211,24 +222,29 @@ function Plan(p: {
         <button className="btn" onClick={p.onWalk}>Start Safe Walk on this route</button>
       </div>
     </div>
+    </>
   );
 }
 
 function ContactsEditor({ cts, locked }: { cts: ReturnType<typeof useContacts>; locked: boolean }) {
-  const [name, setName] = useState(""); const [rel, setRel] = useState("");
+  const [name, setName] = useState(""); const [rel, setRel] = useState(""); const [phone, setPhone] = useState(""); const [err, setErr] = useState("");
   return (<>
     {cts.contacts.map((c) => (
       <div key={c.id} className="row" style={{ margin: "2px 0", alignItems: "center" }}>
-        <label className="c" style={{ flex: 1 }}><input type="checkbox" checked={c.selected} disabled={locked} onChange={() => cts.toggle(c)} />{c.name}{c.relation ? ` (${c.relation})` : ""}</label>
+        <label className="c" style={{ flex: 1 }}><input type="checkbox" checked={c.selected} disabled={locked} onChange={() => cts.toggle(c)} />{c.name}{c.relation ? ` (${c.relation})` : ""}{c.phone ? <span className="mu">&nbsp;· {c.phone}</span> : null}</label>
         {!locked && <button className="chip" aria-label={`Remove ${c.name}`} onClick={() => cts.remove(c.id)}>Remove</button>}
       </div>
     ))}
     {!cts.contacts.length && <p className="mu">No contacts yet — add one below.</p>}
-    {!locked && <form className="row" onSubmit={(e) => { e.preventDefault(); const n = sanitize(name).slice(0, 40); if (!n) return; cts.add(n, sanitize(rel).slice(0, 40)); setName(""); setRel(""); }}>
+    {!locked && <form className="row" onSubmit={(e) => { e.preventDefault(); const n = sanitize(name).slice(0, 40); if (!n) return setErr("Add a name.");
+      const ph = phone.trim(); if (ph && !/^\+?[0-9 ()-]{6,20}$/.test(ph)) return setErr("Phone: digits only, e.g. +91 98765 43210");
+      cts.add(n, sanitize(rel).slice(0, 40), ph).then((e) => { setErr(e ?? ""); if (!e) { setName(""); setRel(""); setPhone(""); } }); }}>
       <input className="inp" style={{ flex: 2, margin: 0 }} placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} maxLength={40} aria-label="Contact name" />
       <input className="inp" style={{ flex: 2, margin: 0 }} placeholder="Relation (optional)" value={rel} onChange={(e) => setRel(e.target.value)} maxLength={40} aria-label="Relation" />
+      <input className="inp" style={{ flex: 2, margin: 0 }} type="tel" placeholder="Phone, e.g. +91 98765 43210" value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={20} aria-label="Phone number" />
       <button className="btn o">Add</button>
     </form>}
+    {err && <p className="note">{err}</p>}
   </>);
 }
 
@@ -317,6 +333,62 @@ function About() {
       {items.map(([title, body, open]) => <details key={title} open={open}><summary>{title}</summary>{body}</details>)}
       <div className="note">SafeRoute helps people choose a safer way home by combining route guidance, trusted contacts, verified campus information and privacy-first emergency support.</div>
       <p className="mu">All routes, lamps and scores are sample data for demonstration.</p>
+    </div>
+  );
+}
+
+function TripBar({ signedIn, onPlanned }: { signedIn: boolean; onPlanned: () => void }) {
+  const plan = useServerFn(planTrip);
+  const [from, setFrom] = useState(TRIP.from);
+  const [to, setTo] = useState(TRIP.to);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const useMine = () => navigator.geolocation?.getCurrentPosition(
+    (p) => setFrom(`${p.coords.latitude.toFixed(5)},${p.coords.longitude.toFixed(5)}`),
+    () => setErr("Couldn't get your location. Type a start place instead."),
+  );
+  const go = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const f = sanitize(from), d = sanitize(to);
+    if (f.length < 2 || d.length < 2) return setErr("Enter both a start and a destination.");
+    if (!signedIn) return setErr("Sign in to search new routes.");
+    setBusy(true); setErr("");
+    try {
+      const r = await plan({ data: { from: f, to: d } });
+      if (r.error || !r.routes.length) return setErr(r.error ?? "No route found.");
+      applyRoutes(r.routes, /^-?\d/.test(f) ? "My location" : f, d); onPlanned();
+    } catch { setErr("Couldn't find routes right now. Please try again."); }
+    finally { setBusy(false); }
+  };
+  return (
+    <form className="pn tripbar" onSubmit={go} aria-label="Plan a trip">
+      <div className="tb-field"><label htmlFor="from">Start</label>
+        <div className="row" style={{ margin: 0, flexWrap: "nowrap" }}><input id="from" className="inp" style={{ margin: 0 }} value={from} onChange={(e) => setFrom(e.target.value)} maxLength={160} placeholder="e.g. MG Road Metro, Bengaluru" />
+          <button type="button" className="chip" onClick={useMine} title="Use my current location">📍</button></div></div>
+      <div className="tb-field"><label htmlFor="to">Destination</label><input id="to" className="inp" style={{ margin: 0 }} value={to} onChange={(e) => setTo(e.target.value)} maxLength={160} placeholder="e.g. Indiranagar 100ft Road" /></div>
+      <button className="btn" disabled={busy} style={{ alignSelf: "end" }}>{busy ? "Finding routes…" : "Find safe routes"}</button>
+      {err && <p className="note" style={{ gridColumn: "1 / -1", margin: 0 }}>{err}</p>}
+    </form>
+  );
+}
+
+/** Free distress actions using the phone's own dialer and SMS app — no paid calling service needed. */
+function DistressLinks({ contacts, where }: { contacts: { id: string; name: string; phone: string | null }[]; where: { lat: number; lng: number } | null }) {
+  const withPhone = contacts.filter((c) => c.phone);
+  const link = where ? `https://maps.google.com/?q=${where.lat.toFixed(5)},${where.lng.toFixed(5)}` : "";
+  const body = encodeURIComponent(`SafeRoute distress alert: I need help.${link ? ` My location: ${link}` : ""}`);
+  return (
+    <div className="distress">
+      <h3>Call or message for help</h3>
+      {!withPhone.length && <p className="mu">Add phone numbers to your selected trusted contacts to call them from here.</p>}
+      {withPhone.map((c) => (
+        <div key={c.id} className="row" style={{ alignItems: "center", margin: "4px 0" }}>
+          <b style={{ flex: 1 }}>{c.name}</b>
+          <a className="btn" href={`tel:${c.phone!.replace(/[^+0-9]/g, "")}`}>Call</a>
+          <a className="btn o" href={`sms:${c.phone!.replace(/[^+0-9]/g, "")}?body=${body}`}>SMS location</a>
+        </div>
+      ))}
+      <div className="row"><a className="btn d" href="tel:112">Emergency 112</a><a className="btn o" href="tel:1091">Women helpline 1091</a><a className="btn o" href="tel:100">Police 100</a></div>
     </div>
   );
 }
