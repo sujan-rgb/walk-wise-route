@@ -3,7 +3,7 @@ import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import type { Category, Report, RouteKey } from "@/lib/saferoute";
 
-export interface Contact { id: string; name: string; relation: string | null; selected: boolean }
+export interface Contact { id: string; name: string; relation: string | null; phone: string | null; selected: boolean }
 
 type Row = { id: string; category: string; area: string; details: string; status: string };
 const toReport = (r: Row): Report => ({ id: r.id, cat: r.category as Category, a: r.area as RouteKey, txt: r.details, st: r.status as Report["st"] });
@@ -63,14 +63,14 @@ export function useContacts(user: User | null) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const load = useCallback(async () => {
     if (!user) return setContacts([]);
-    const { data } = await supabase.from("trusted_contacts").select("id,name,relation,selected").order("created_at");
+    const { data } = await supabase.from("trusted_contacts").select("id,name,relation,phone,selected").order("created_at");
     setContacts(data ?? []);
   }, [user]);
   useEffect(() => { load(); }, [load]);
   return {
     contacts,
     toggle: async (c: Contact) => { setContacts((l) => l.map((x) => (x.id === c.id ? { ...x, selected: !x.selected } : x))); await supabase.from("trusted_contacts").update({ selected: !c.selected }).eq("id", c.id); },
-    add: async (name: string, relation: string) => { if (!user) return; await supabase.from("trusted_contacts").insert({ name, relation: relation || null, user_id: user.id }); await load(); },
+    add: async (name: string, relation: string, phone: string) => { if (!user) return "Sign in first."; const { error } = await supabase.from("trusted_contacts").insert({ name, relation: relation || null, phone: phone || null, user_id: user.id }); if (error) return "Check the phone number format (digits, optional +country code)."; await load(); return null; },
     remove: async (id: string) => { await supabase.from("trusted_contacts").delete().eq("id", id); await load(); },
   };
 }

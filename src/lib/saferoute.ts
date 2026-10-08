@@ -27,11 +27,23 @@ export const ROUTE_KEYS = Object.keys(ROUTES) as RouteKey[];
 export const WEIGHTS = [[0.15, 0.25, 0.25, 0.35], [0.3, 0.25, 0.2, 0.25], [0.4, 0.2, 0.2, 0.2]];
 export const TIMES = ["Day · 2 pm", "Evening · 7 pm", "Night · 11 pm"];
 export const SPEEDS: Record<Mode, number> = { Walking: 5, Cycling: 14, "Campus ride": 20 };
-/** Help points placed on the real paths: [lat, lng, name] */
-export const HELP_POINTS: [number, number, string][] = ([
-  ["safe", 0.2, "Security booth"], ["safe", 0.5, "Medical point"], ["safe", 0.78, "Help desk"],
-  ["bal", 0.55, "Security booth"], ["fast", 0.45, "Police booth"],
-] as const).map(([k, t, n]) => { const q = pointAt(ROUTES[k as RouteKey].p, t); return [q[0], q[1], n]; });
+/** Current trip endpoints (labels shown on the map and in the planner). */
+export const TRIP = { from: "State Central Library, Cubbon Park", to: "Hostel Block C, Ulsoor" };
+
+/** Replace the three route slots with real paths, shortest first → Fastest, longest → Safest. */
+export function applyRoutes(paths: { p: [number, number][]; km: number; a: string }[], from: string, to: string) {
+  const sorted = [...paths].sort((x, y) => x.km - y.km);
+  ROUTE_KEYS.forEach((k, i) => { const r = sorted[Math.min(i, sorted.length - 1)]; if (r) Object.assign(ROUTES[k], { p: r.p, km: r.km, a: r.a }); });
+  TRIP.from = from; TRIP.to = to;
+}
+
+/** Help points placed along the current paths: [lat, lng, name] */
+export function helpPoints(): [number, number, string][] {
+  return ([
+    ["safe", 0.2, "Security booth"], ["safe", 0.5, "Medical point"], ["safe", 0.78, "Help desk"],
+    ["bal", 0.55, "Security booth"], ["fast", 0.45, "Police booth"],
+  ] as const).map(([k, t, n]) => { const q = pointAt(ROUTES[k as RouteKey].p, t); return [q[0], q[1], n]; });
+}
 export const REPORT_LIMIT = 3;
 export const REPORT_WINDOW_MS = 60 * 60 * 1000;
 export const REPORT_PENALTY = 8;

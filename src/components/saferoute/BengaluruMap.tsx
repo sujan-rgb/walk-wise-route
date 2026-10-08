@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { HELP_POINTS, ROUTES, ROUTE_KEYS, pointAt, type Report, type RouteKey } from "@/lib/saferoute";
+import { TRIP, helpPoints, ROUTES, ROUTE_KEYS, pointAt, type Report, type RouteKey } from "@/lib/saferoute";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 declare global { interface Window { __srMapsReady?: () => void; google?: any } }
@@ -23,7 +23,8 @@ function loadMaps(): Promise<void> {
 
 const css = (v: string, fb: string) => getComputedStyle(document.documentElement).getPropertyValue(v).trim() || fb;
 
-export function BengaluruMap({ t, sel, lay, reps, walk, onSelect }: {
+export function BengaluruMap({ t, sel, lay, reps, walk, onSelect, ver = 0 }: {
+  ver?: number;
   t: number; sel: RouteKey; lay: { l: boolean; h: boolean; r: boolean }; reps: Report[];
   walk: { k: RouteKey; p: number } | null; onSelect: (k: RouteKey) => void;
 }) {
@@ -63,13 +64,21 @@ export function BengaluruMap({ t, sel, lay, reps, walk, onSelect }: {
         for (let i = 1; i <= n; i++) add(new g.Circle({ map: m, center: toLatLng(pointAt(ROUTES[k].p, i / (n + 1))), radius: 22, fillColor: "#f2b84b", fillOpacity: 0.95, strokeWeight: 0, zIndex: 4 }));
       }
     });
-    if (lay.h) HELP_POINTS.forEach(([x, y, name]) => add(new g.Marker({ map: m, position: toLatLng([x, y]), title: name, label: { text: "+", color: "#fff", fontWeight: "800" },
+    if (lay.h) helpPoints().forEach(([x, y, name]) => add(new g.Marker({ map: m, position: toLatLng([x, y]), title: name, label: { text: "+", color: "#fff", fontWeight: "800" },
       icon: { path: g.SymbolPath.CIRCLE, scale: 10, fillColor: "#2f6fed", fillOpacity: 1, strokeColor: "#fff", strokeWeight: 2 } })));
     if (lay.r) reps.filter((x) => x.st === "verified").forEach((x, i) => add(new g.Marker({ map: m, position: toLatLng(pointAt(ROUTES[x.a].p, 0.35 + 0.1 * (i % 4))), title: `${x.cat}: ${x.txt}`,
       label: { text: "!", color: "#fff", fontWeight: "800" }, icon: { path: g.SymbolPath.BACKWARD_CLOSED_ARROW, scale: 7, fillColor: "#ef4444", fillOpacity: 1, strokeColor: "#fff", strokeWeight: 1 } })));
-    add(new g.Marker({ map: m, position: toLatLng(ROUTES.fast.p[0]!), title: "State Central Library, Cubbon Park", label: { text: "Central Library", fontWeight: "700" } }));
-    add(new g.Marker({ map: m, position: toLatLng(ROUTES.fast.p[ROUTES.fast.p.length - 1]!), title: "Hostel Block C, Ulsoor", label: { text: "Hostel Block C", fontWeight: "700" } }));
-  }, [ready, t, sel, lay, reps, onSelect]);
+    add(new g.Marker({ map: m, position: toLatLng(ROUTES.fast.p[0]!), title: TRIP.from, label: { text: "Start", fontWeight: "700" } }));
+    add(new g.Marker({ map: m, position: toLatLng(ROUTES.fast.p[ROUTES.fast.p.length - 1]!), title: TRIP.to, label: { text: "Destination", fontWeight: "700" } }));
+  }, [ready, t, sel, lay, reps, onSelect, ver]);
+
+  // Fit the view to the routes whenever a new trip is planned
+  useEffect(() => {
+    if (!ready) return;
+    const b = new window.google.maps.LatLngBounds();
+    ROUTE_KEYS.forEach((k) => ROUTES[k].p.forEach((q) => b.extend(toLatLng(q))));
+    map.current.fitBounds(b, 30);
+  }, [ready, ver]);
 
   // Live Safe Walk position
   useEffect(() => {

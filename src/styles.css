@@ -178,3 +178,8 @@
 .sr .stop{width:100%;font-size:17px;padding:12px}
 .sr .consent{align-items:flex-start;font-size:14px;margin:12px 0;padding:10px;border:1px dashed var(--sr-ln);border-radius:8px}
 .sr .inp{font:inherit;padding:8px;border:1px solid var(--sr-ln);border-radius:8px;background:var(--sr-bg);color:var(--sr-ink);width:100%;margin-bottom:8px}
+.sr .tripbar{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;margin-bottom:16px}@media(max-width:720px){.sr .tripbar{grid-template-columns:1fr}}
+.sr .tb-field label{font-size:13px;font-weight:600;color:var(--sr-mu)}
+.sr a.btn{display:inline-block;text-decoration:none;text-align:center}
+.sr .call112{display:block;font-size:18px;padding:14px;margin:10px 0}
+.sr .distress{border-top:1px solid var(--sr-ln);margin-top:12px;padding-top:4px;text-align:left}
