@@ -6,3 +6,4 @@
 - The first account to sign up is made moderator by the signup trigger; roles live only in user_roles.
 - Trip routes come from the planTrip server function (Routes API via connector gateway, sign-in required to bound map costs); results replace the three route slots shortest→Fastest, longest→Safest.
 - Distress calling uses tel:/sms: links (phone's own dialer) — free, no paid calling service.
+- SOS live location: a live_shares row per SOS, updated from watchPosition; public /live/$id page reads it only via the get_live_share security-definer function (no anon table access).
