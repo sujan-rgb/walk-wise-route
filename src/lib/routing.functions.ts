@@ -64,3 +64,22 @@ export const planTrip = createServerFn({ method: "POST" })
       return { error: "Couldn't find routes right now. Please try again.", routes: [] };
     }
   });
+
+/** Place suggestions for the start/destination search box (biased to Bengaluru). */
+export const suggestPlaces = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ q: place }).parse(d))
+  .handler(async ({ data }) => {
+    const key = process.env["LOVABLE_API_KEY"], conn = process.env["GOOGLE_MAPS_API_KEY"];
+    if (!key || !conn) return [] as string[];
+    try {
+      const res = await fetch(`${GATEWAY}/places/v1/places:autocomplete`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${key}`, "X-Connection-Api-Key": conn, "Content-Type": "application/json" },
+        body: JSON.stringify({ input: data.q, includedRegionCodes: ["in"], languageCode: "en", locationBias: { circle: { center: { latitude: 12.9716, longitude: 77.5946 }, radius: 30000 } } }),
+      });
+      if (!res.ok) { console.error(`Autocomplete failed [${res.status}]: ${await res.text()}`); return []; }
+      const j = (await res.json()) as { suggestions?: { placePrediction?: { text?: { text?: string } } }[] };
+      return (j.suggestions ?? []).map((s) => s.placePrediction?.text?.text).filter((x): x is string => !!x).slice(0, 6);
+    } catch { return []; }
+  });

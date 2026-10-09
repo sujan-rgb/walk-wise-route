@@ -7,7 +7,7 @@ declare global { interface Window { __srMapsReady?: () => void; google?: any } }
 export const toLatLng = ([lat, lng]: [number, number]) => ({ lat, lng });
 
 let loader: Promise<void> | null = null;
-function loadMaps(): Promise<void> {
+export function loadMaps(): Promise<void> {
   if (window.google?.maps?.Map) return Promise.resolve();
   if (loader) return loader;
   loader = new Promise((resolve, reject) => {
