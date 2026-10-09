@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      live_shares: {
+        Row: {
+          acc: number | null
+          active: boolean
+          created_at: string
+          expires_at: string
+          id: string
+          lat: number | null
+          lng: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          acc?: number | null
+          active?: boolean
+          created_at?: string
+          expires_at?: string
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          acc?: number | null
+          active?: boolean
+          created_at?: string
+          expires_at?: string
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -118,6 +154,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_live_share: {
+        Args: { _id: string }
+        Returns: {
+          acc: number
+          lat: number
+          live: boolean
+          lng: number
+          name: string
+          updated_at: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

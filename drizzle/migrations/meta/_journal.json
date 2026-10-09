@@ -15,6 +15,13 @@
       "when": 1791467310656,
       "tag": "0001_migration",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791563743986,
+      "tag": "0002_live_shares",
+      "breakpoints": true
     }
   ]
 }
