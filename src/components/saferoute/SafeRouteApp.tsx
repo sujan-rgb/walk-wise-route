@@ -188,7 +188,7 @@ export function SafeRouteApp() {
                   <button className="btn" onClick={() => stopWalk("Arrived safely. Contacts notified and sharing stopped.")}>Arrived safely</button>
                   <button className="btn o" onClick={() => note("Missed check-in. Contacts asked to call you; SOS suggested.")}>Simulate missed check-in</button>
                 </div>
-                <DistressLinks contacts={picked} where={geo} />
+                <DistressLinks contacts={picked} where={geo} shareId={null} geoState={geo ? "live" : "asking"} name={user?.user_metadata?.["full_name"] || user?.email?.split("@")[0] || ""} trip={`${TRIP.from} → ${TRIP.to}`} signedIn={!!user} onRetry={() => {}} />
               </>) : <div className="row"><button className="btn" disabled={!consent} style={{ opacity: consent ? 1 : 0.5 }} onClick={startWalk}>Start Safe Walk on {ROUTES[sel].n} route</button></div>}
               <p className="mu">Privacy: location is shared only during this walk and is discarded when sharing stops.</p>
             </div>
@@ -205,7 +205,7 @@ export function SafeRouteApp() {
               : "sent" in sos ? (<>
                 <div className="note" style={{ textAlign: "left" }} role="alert"><b>Alert sent.</b> Contacts and campus security can see your live location.<br />If you are in danger, call your local emergency number now (112 in India). Move toward the nearest lit, staffed place or help point.</div>
                 <a className="btn d call112" href="tel:112">Call 112 now (emergency)</a>
-                <DistressLinks contacts={picked} where={here ?? geo} shareId={shareId} geoState={sosGeo} name={user?.user_metadata?.full_name || user?.email?.split("@")[0] || ""} trip={`${TRIP.from} → ${TRIP.to}`} signedIn={!!user} onRetry={() => { stopSosLocation(); startSosLocation(); }} />
+                <DistressLinks contacts={picked} where={here ?? geo} shareId={shareId} geoState={sosGeo} name={user?.user_metadata?.["full_name"] || user?.email?.split("@")[0] || ""} trip={`${TRIP.from} → ${TRIP.to}`} signedIn={!!user} onRetry={() => { stopSosLocation(); startSosLocation(); }} />
                 <button className="btn o" onClick={() => { stopSosLocation(); setSos(null); note("SOS ended. Location sharing stopped."); }}>Stop sharing and end SOS</button>
               </>) : (<>
                 <button className="sos" disabled aria-live="assertive">{sos.n}</button>
