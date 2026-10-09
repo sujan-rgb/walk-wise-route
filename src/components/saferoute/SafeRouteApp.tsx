@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { BengaluruMap } from "./BengaluruMap";
 import { useServerFn } from "@tanstack/react-start";
-import { planTrip } from "@/lib/routing.functions";
+import { planTrip, suggestPlaces } from "@/lib/routing.functions";
 import { useContacts, useIsModerator, useReports, useSession } from "./useLiveData";
 import {
   CATEGORIES, TRIP, applyRoutes, ROUTES, ROUTE_KEYS, SPEEDS, TIMES, minutes, sanitize, score,
@@ -38,7 +38,39 @@ export function SafeRouteApp() {
   const [log, setLog] = useState<string[]>([]);
   const [msg, setMsg] = useState("");
   const [ver, setVer] = useState(0);
-  const [here, setHere] = useState<{ lat: number; lng: number } | null>(null);
+  const [here, setHere] = useState<{ lat: number; lng: number; acc?: number; at?: number } | null>(null);
+  const [shareId, setShareId] = useState<string | null>(null);
+  const [sosGeo, setSosGeo] = useState<"asking" | "live" | "denied" | "unsupported">("asking");
+  const sosWatch = useRef<number | null>(null);
+  const shareRef = useRef<string | null>(null);
+  const lastPush = useRef(0);
+  const startSosLocation = async () => {
+    setSosGeo("asking");
+    if (user) {
+      const { data } = await supabase.from("live_shares").insert({ user_id: user.id }).select("id").single();
+      if (data) { shareRef.current = data.id; setShareId(data.id); }
+    }
+    if (!("geolocation" in navigator)) return setSosGeo("unsupported");
+    sosWatch.current = navigator.geolocation.watchPosition(
+      (p) => {
+        const v = { lat: p.coords.latitude, lng: p.coords.longitude, acc: Math.round(p.coords.accuracy), at: Date.now() };
+        setHere(v); setSosGeo("live");
+        if (shareRef.current && Date.now() - lastPush.current > 4000) {
+          lastPush.current = Date.now();
+          supabase.from("live_shares").update({ lat: v.lat, lng: v.lng, acc: v.acc, updated_at: new Date().toISOString() }).eq("id", shareRef.current).then(() => {});
+        }
+      },
+      () => setSosGeo("denied"),
+      { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 },
+    );
+  };
+  const stopSosLocation = () => {
+    if (sosWatch.current !== null) navigator.geolocation.clearWatch(sosWatch.current);
+    sosWatch.current = null;
+    if (shareRef.current) supabase.from("live_shares").update({ active: false }).eq("id", shareRef.current).then(() => {});
+    shareRef.current = null; setShareId(null); setHere(null);
+  };
+  useEffect(() => () => stopSosLocation(), []);
   const picked = cts.contacts.filter((c) => c.selected);
   const contacts = picked.map((c) => c.name);
   const note = (m: string) => setLog((l) => [`${stamp()} · ${m}`, ...l]);
@@ -169,15 +201,15 @@ export function SafeRouteApp() {
           <div className="pn" style={{ maxWidth: 560, margin: "auto", textAlign: "center" }}>
             <h2>SOS support</h2>
             <p className="mu">Sends an alert and live location to your chosen contacts ({contacts.join(", ") || "none selected"}) and campus security.</p>
-            {!sos ? (<><button className="sos" onClick={() => { setSos({ n: 5 }); navigator.geolocation?.getCurrentPosition((p) => setHere({ lat: p.coords.latitude, lng: p.coords.longitude }), () => {}); }}>SOS</button><p className="mu">A 5-second countdown lets you cancel accidental taps.</p></>)
+            {!sos ? (<><button className="sos" onClick={() => { setSos({ n: 5 }); startSosLocation(); }}>SOS</button><p className="mu">A 5-second countdown lets you cancel accidental taps.</p></>)
               : "sent" in sos ? (<>
                 <div className="note" style={{ textAlign: "left" }} role="alert"><b>Alert sent.</b> Contacts and campus security can see your live location.<br />If you are in danger, call your local emergency number now (112 in India). Move toward the nearest lit, staffed place or help point.</div>
                 <a className="btn d call112" href="tel:112">Call 112 now (emergency)</a>
-                <DistressLinks contacts={picked} where={here ?? geo} />
-                <button className="btn o" onClick={() => { setSos(null); note("SOS ended. Location sharing stopped."); }}>Stop sharing and end SOS</button>
+                <DistressLinks contacts={picked} where={here ?? geo} shareId={shareId} geoState={sosGeo} name={user?.user_metadata?.full_name || user?.email?.split("@")[0] || ""} trip={`${TRIP.from} → ${TRIP.to}`} signedIn={!!user} onRetry={() => { stopSosLocation(); startSosLocation(); }} />
+                <button className="btn o" onClick={() => { stopSosLocation(); setSos(null); note("SOS ended. Location sharing stopped."); }}>Stop sharing and end SOS</button>
               </>) : (<>
                 <button className="sos" disabled aria-live="assertive">{sos.n}</button>
-                <button className="btn o" onClick={() => setSos(null)}>Cancel alert</button>
+                <button className="btn o" onClick={() => { stopSosLocation(); setSos(null); }}>Cancel alert</button>
               </>)}
           </div>
         )}
@@ -337,6 +369,40 @@ function About() {
   );
 }
 
+function PlaceInput({ id, value, onChange, placeholder, signedIn }: { id: string; value: string; onChange: (v: string) => void; placeholder: string; signedIn: boolean }) {
+  const suggest = useServerFn(suggestPlaces);
+  const [opts, setOpts] = useState<string[]>([]);
+  const [open, setOpen] = useState(false);
+  const [hi, setHi] = useState(-1);
+  const typed = useRef(false);
+  useEffect(() => {
+    if (!typed.current || !signedIn || value.trim().length < 3 || /^-?\d/.test(value)) { setOpts([]); return; }
+    const tm = setTimeout(() => { suggest({ data: { q: value.trim() } }).then((r) => { setOpts(r); setHi(-1); setOpen(true); }).catch(() => setOpts([])); }, 300);
+    return () => clearTimeout(tm);
+  }, [value, signedIn]);
+  const pick = (v: string) => { typed.current = false; onChange(v); setOpen(false); setOpts([]); };
+  return (
+    <div style={{ position: "relative", flex: 1 }}>
+      <input id={id} className="inp" style={{ margin: 0, width: "100%" }} value={value} maxLength={160} placeholder={placeholder} autoComplete="off"
+        role="combobox" aria-expanded={open && opts.length > 0} aria-controls={`${id}-list`}
+        onChange={(e) => { typed.current = true; onChange(e.target.value); }}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onKeyDown={(e) => {
+          if (!open || !opts.length) return;
+          if (e.key === "ArrowDown") { e.preventDefault(); setHi((h) => (h + 1) % opts.length); }
+          else if (e.key === "ArrowUp") { e.preventDefault(); setHi((h) => (h - 1 + opts.length) % opts.length); }
+          else if (e.key === "Enter" && hi >= 0) { e.preventDefault(); pick(opts[hi]!); }
+          else if (e.key === "Escape") setOpen(false);
+        }} />
+      {open && opts.length > 0 && (
+        <ul id={`${id}-list`} role="listbox" className="suggest">
+          {opts.map((o, i) => <li key={o} role="option" aria-selected={i === hi} className={i === hi ? "on" : ""} onMouseDown={(e) => { e.preventDefault(); pick(o); }}>📍 {o}</li>)}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function TripBar({ signedIn, onPlanned }: { signedIn: boolean; onPlanned: () => void }) {
   const plan = useServerFn(planTrip);
   const [from, setFrom] = useState(TRIP.from);
@@ -363,9 +429,9 @@ function TripBar({ signedIn, onPlanned }: { signedIn: boolean; onPlanned: () => 
   return (
     <form className="pn tripbar" onSubmit={go} aria-label="Plan a trip">
       <div className="tb-field"><label htmlFor="from">Start</label>
-        <div className="row" style={{ margin: 0, flexWrap: "nowrap" }}><input id="from" className="inp" style={{ margin: 0 }} value={from} onChange={(e) => setFrom(e.target.value)} maxLength={160} placeholder="e.g. MG Road Metro, Bengaluru" />
+        <div className="row" style={{ margin: 0, flexWrap: "nowrap" }}><PlaceInput id="from" value={from} onChange={setFrom} placeholder="e.g. MG Road Metro, Bengaluru" signedIn={signedIn} />
           <button type="button" className="chip" onClick={useMine} title="Use my current location">📍</button></div></div>
-      <div className="tb-field"><label htmlFor="to">Destination</label><input id="to" className="inp" style={{ margin: 0 }} value={to} onChange={(e) => setTo(e.target.value)} maxLength={160} placeholder="e.g. Indiranagar 100ft Road" /></div>
+      <div className="tb-field"><label htmlFor="to">Destination</label><PlaceInput id="to" value={to} onChange={setTo} placeholder="e.g. Indiranagar 100ft Road" signedIn={signedIn} /></div>
       <button className="btn" disabled={busy} style={{ alignSelf: "end" }}>{busy ? "Finding routes…" : "Find safe routes"}</button>
       {err && <p className="note" style={{ gridColumn: "1 / -1", margin: 0 }}>{err}</p>}
     </form>
@@ -373,21 +439,43 @@ function TripBar({ signedIn, onPlanned }: { signedIn: boolean; onPlanned: () => 
 }
 
 /** Free distress actions using the phone's own dialer and SMS app — no paid calling service needed. */
-function DistressLinks({ contacts, where }: { contacts: { id: string; name: string; phone: string | null }[]; where: { lat: number; lng: number } | null }) {
+function DistressLinks({ contacts, where, shareId, geoState, name, trip, signedIn, onRetry }: {
+  contacts: { id: string; name: string; phone: string | null }[]; where: { lat: number; lng: number; acc?: number; at?: number } | null;
+  shareId: string | null; geoState: "asking" | "live" | "denied" | "unsupported"; name: string; trip: string; signedIn: boolean; onRetry: () => void;
+}) {
   const withPhone = contacts.filter((c) => c.phone);
-  const link = where ? `https://maps.google.com/?q=${where.lat.toFixed(5)},${where.lng.toFixed(5)}` : "";
-  const body = encodeURIComponent(`SafeRoute distress alert: I need help.${link ? ` My location: ${link}` : ""}`);
+  const num = (p: string) => p.replace(/[^+0-9]/g, "");
+  const liveLink = shareId && typeof window !== "undefined" ? `${window.location.origin}/live/${shareId}` : "";
+  const coords = where ? `${where.lat.toFixed(6)}, ${where.lng.toFixed(6)}` : "";
+  const text = [
+    `SOS from ${name || "a SafeRoute user"} — I need help urgently.`,
+    where ? `My coordinates: ${coords}${where.acc ? ` (accuracy ±${where.acc} m)` : ""}` : "My location could not be detected yet.",
+    where ? `Map pin: https://maps.google.com/?q=${where.lat.toFixed(6)},${where.lng.toFixed(6)}` : "",
+    liveLink ? `Follow my LIVE location (updates every few seconds): ${liveLink}` : "",
+    `Planned trip: ${trip}`,
+    `Sent at ${new Date().toLocaleString()}.`,
+    "Please call me right away. If I don't answer, call 112 (emergency) or 100 (police) and share this location.",
+  ].filter(Boolean).join("\n");
+  const body = encodeURIComponent(text);
+  const all = withPhone.map((c) => num(c.phone!)).join(",");
+  const geoMsg = { asking: "Getting your location…", live: `Location on: ${coords}${where?.acc ? ` (±${where.acc} m)` : ""}`, denied: "Location access was blocked. Allow location for this site in your browser settings, then retry.", unsupported: "This device can't share location." }[geoState];
   return (
     <div className="distress">
       <h3>Call or message for help</h3>
-      {!withPhone.length && <p className="mu">Add phone numbers to your selected trusted contacts to call them from here.</p>}
+      <div className="note" style={{ textAlign: "left" }} aria-live="polite">
+        📍 {geoMsg} {geoState !== "live" && <button type="button" className="chip" onClick={onRetry}>Retry location</button>}
+        {liveLink ? <><br />Live link: <a href={liveLink} target="_blank" rel="noreferrer">{liveLink}</a></> : !signedIn ? <><br />Sign in to include a live location link.</> : null}
+      </div>
+      {!withPhone.length && <p className="mu">Add phone numbers to your selected trusted contacts to call or text them from here.</p>}
+      {withPhone.length > 1 && <a className="btn d" href={`sms:${all}?body=${body}`}>SMS location to all {withPhone.length} contacts</a>}
       {withPhone.map((c) => (
         <div key={c.id} className="row" style={{ alignItems: "center", margin: "4px 0" }}>
           <b style={{ flex: 1 }}>{c.name}</b>
-          <a className="btn" href={`tel:${c.phone!.replace(/[^+0-9]/g, "")}`}>Call</a>
-          <a className="btn o" href={`sms:${c.phone!.replace(/[^+0-9]/g, "")}?body=${body}`}>SMS location</a>
+          <a className="btn" href={`tel:${num(c.phone!)}`}>Call</a>
+          <a className="btn o" href={`sms:${num(c.phone!)}?body=${body}`}>SMS location</a>
         </div>
       ))}
+      <details style={{ textAlign: "left" }}><summary>Preview message</summary><pre style={{ whiteSpace: "pre-wrap", fontSize: 13 }}>{text}</pre></details>
       <div className="row"><a className="btn d" href="tel:112">Emergency 112</a><a className="btn o" href="tel:1091">Women helpline 1091</a><a className="btn o" href="tel:100">Police 100</a></div>
     </div>
   );

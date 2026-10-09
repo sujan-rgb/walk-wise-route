@@ -183,3 +183,7 @@
 .sr a.btn{display:inline-block;text-decoration:none;text-align:center}
 .sr .call112{display:block;font-size:18px;padding:14px;margin:10px 0}
 .sr .distress{border-top:1px solid var(--sr-ln);margin-top:12px;padding-top:4px;text-align:left}
+
+.sr .suggest { position: absolute; z-index: 20; left: 0; right: 0; top: 100%; margin: 4px 0 0; padding: 4px; list-style: none; background: var(--sr-card, var(--background)); border: 1px solid var(--sr-line, var(--border)); border-radius: 10px; box-shadow: 0 8px 24px rgb(0 0 0 / 0.15); max-height: 260px; overflow: auto; }
+.sr .suggest li { padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+.sr .suggest li:hover, .sr .suggest li.on { background: var(--sr-map, var(--muted)); }
