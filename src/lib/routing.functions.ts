@@ -83,3 +83,37 @@ export const suggestPlaces = createServerFn({ method: "POST" })
       return (j.suggestions ?? []).map((s) => s.placePrediction?.text?.text).filter((x): x is string => !!x).slice(0, 6);
     } catch { return []; }
   });
+
+/** Nearest police stations and hospitals around the user's SOS location. */
+export const nearbyHelp = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) }).parse(d))
+  .handler(async ({ data }) => {
+    const key = process.env["LOVABLE_API_KEY"], conn = process.env["GOOGLE_MAPS_API_KEY"];
+    if (!key || !conn) return { error: "Maps is not configured.", police: [], hospital: [] };
+    type P = { displayName?: { text?: string }; formattedAddress?: string; nationalPhoneNumber?: string; internationalPhoneNumber?: string; location?: { latitude: number; longitude: number } };
+    const dist = (a: number, b: number) => {
+      const R = 6371000, r = Math.PI / 180, dLa = (a - data.lat) * r, dLo = (b - data.lng) * r;
+      const h = Math.sin(dLa / 2) ** 2 + Math.cos(data.lat * r) * Math.cos(a * r) * Math.sin(dLo / 2) ** 2;
+      return Math.round(2 * R * Math.asin(Math.sqrt(h)));
+    };
+    const search = async (type: string) => {
+      const res = await fetch(`${GATEWAY}/places/v1/places:searchNearby`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${key}`, "X-Connection-Api-Key": conn, "Content-Type": "application/json",
+          "X-Goog-FieldMask": "places.displayName,places.formattedAddress,places.nationalPhoneNumber,places.internationalPhoneNumber,places.location" },
+        body: JSON.stringify({ includedTypes: [type], maxResultCount: 5, rankPreference: "DISTANCE", locationRestriction: { circle: { center: { latitude: data.lat, longitude: data.lng }, radius: 10000 } } }),
+      });
+      if (!res.ok) { console.error(`Nearby ${type} failed [${res.status}]: ${await res.text()}`); return []; }
+      const j = (await res.json()) as { places?: P[] };
+      return (j.places ?? []).filter((p) => p.location).map((p) => ({
+        name: p.displayName?.text ?? "Unnamed", address: p.formattedAddress ?? "",
+        phone: p.internationalPhoneNumber || p.nationalPhoneNumber || null,
+        lat: p.location!.latitude, lng: p.location!.longitude, m: dist(p.location!.latitude, p.location!.longitude),
+      })).sort((a, b) => a.m - b.m).slice(0, 3);
+    };
+    try {
+      const [police, hospital] = await Promise.all([search("police"), search("hospital")]);
+      return { error: null, police, hospital };
+    } catch { return { error: "Couldn't look up nearby help right now.", police: [], hospital: [] }; }
+  });
