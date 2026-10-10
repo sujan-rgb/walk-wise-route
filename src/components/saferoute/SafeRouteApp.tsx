@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { BengaluruMap } from "./BengaluruMap";
 import { useServerFn } from "@tanstack/react-start";
-import { planTrip, suggestPlaces } from "@/lib/routing.functions";
+import { nearbyHelp, planTrip, suggestPlaces } from "@/lib/routing.functions";
 import { useContacts, useIsModerator, useReports, useSession } from "./useLiveData";
 import {
   CATEGORIES, TRIP, applyRoutes, ROUTES, ROUTE_KEYS, SPEEDS, TIMES, minutes, sanitize, score,
@@ -206,6 +206,7 @@ export function SafeRouteApp() {
                 <div className="note" style={{ textAlign: "left" }} role="alert"><b>Alert sent.</b> Contacts and campus security can see your live location.<br />If you are in danger, call your local emergency number now (112 in India). Move toward the nearest lit, staffed place or help point.</div>
                 <a className="btn d call112" href="tel:112">Call 112 now (emergency)</a>
                 <DistressLinks contacts={picked} where={here ?? geo} shareId={shareId} geoState={sosGeo} name={user?.user_metadata?.["full_name"] || user?.email?.split("@")[0] || ""} trip={`${TRIP.from} → ${TRIP.to}`} signedIn={!!user} autoSend onRetry={() => { stopSosLocation(); startSosLocation(); }} />
+                <NearbyHelp where={here} signedIn={!!user} />
                 <button className="btn o" onClick={() => { stopSosLocation(); setSos(null); note("SOS ended. Location sharing stopped."); }}>Stop sharing and end SOS</button>
               </>) : (<>
                 <button className="sos" disabled aria-live="assertive">{sos.n}</button>
@@ -495,6 +496,42 @@ function DistressLinks({ contacts, where, shareId, geoState, name, trip, signedI
       ))}
       <details style={{ textAlign: "left" }}><summary>Preview message</summary><pre style={{ whiteSpace: "pre-wrap", fontSize: 13 }}>{text}</pre></details>
       <div className="row"><a className="btn d" href="tel:112">Emergency 112</a><a className="btn o" href="tel:1091">Women helpline 1091</a><a className="btn o" href="tel:100">Police 100</a></div>
+    </div>
+  );
+}
+
+type Place = { name: string; address: string; phone: string | null; lat: number; lng: number; m: number };
+/** Nearest police stations and hospitals, looked up once the user's location is known. */
+function NearbyHelp({ where, signedIn }: { where: { lat: number; lng: number } | null; signedIn: boolean }) {
+  const find = useServerFn(nearbyHelp);
+  const [res, setRes] = useState<{ police: Place[]; hospital: Place[] } | null>(null);
+  const [err, setErr] = useState("");
+  const done = useRef(false);
+  useEffect(() => {
+    if (!where || !signedIn || done.current) return;
+    done.current = true;
+    find({ data: { lat: where.lat, lng: where.lng } }).then((r) => { if (r.error) setErr(r.error); setRes(r); }).catch(() => setErr("Couldn't look up nearby help right now."));
+  }, [where, signedIn]);
+  const km = (m: number) => (m < 1000 ? `${m} m` : `${(m / 1000).toFixed(1)} km`);
+  const list = (title: string, items: Place[], fallback: [string, string]) => (
+    <div style={{ textAlign: "left", margin: "10px 0" }}>
+      <h4 style={{ margin: "6px 0" }}>{title}</h4>
+      {!items.length ? <p className="mu">None found nearby. <a href={`tel:${fallback[1]}`}>{fallback[0]}</a></p> : items.map((p) => (
+        <div key={p.name + p.lat} className="row" style={{ alignItems: "center", margin: "4px 0", flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 180 }}><b>{p.name}</b> <span className="mu">· {km(p.m)}</span><br /><span className="mu" style={{ fontSize: 13 }}>{p.address}</span></div>
+          {p.phone ? <a className="btn" href={`tel:${p.phone.replace(/[^+0-9]/g, "")}`}>Call</a> : <a className="btn o" href={`tel:${fallback[1]}`}>Call {fallback[1]}</a>}
+          <a className="btn o" href={`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}&travelmode=walking`} target="_blank" rel="noreferrer">Directions</a>
+        </div>
+      ))}
+    </div>
+  );
+  return (
+    <div className="distress">
+      <h3>Nearest police and hospitals</h3>
+      {!signedIn ? <p className="mu"><Link to="/auth">Sign in</Link> to see the nearest police stations and hospitals. You can still call 100 (police) or 108 (ambulance).</p>
+        : !where ? <p className="mu">Waiting for your location to find help nearby…</p>
+        : !res ? <p className="mu" role="status">Finding the nearest police stations and hospitals…</p>
+        : <>{err && <p className="note">{err}</p>}{list("🚓 Police stations", res.police, ["Call 100 (police)", "100"])}{list("🏥 Hospitals", res.hospital, ["Call 108 (ambulance)", "108"])}</>}
     </div>
   );
 }
