@@ -281,7 +281,8 @@ function ContactsEditor({ cts, locked }: { cts: ReturnType<typeof useContacts>; 
 }
 
 function Reports({ reps, live, signedIn, isMod, msg, setMsg }: { reps: Report[]; live: ReturnType<typeof useReports>; signedIn: boolean; isMod: boolean; msg: string; setMsg: (s: string) => void }) {
-  const [cat, setCat] = useState<Category>(CATEGORIES[0]);
+  const [cat, setCat] = useState<string>(CATEGORIES[0]);
+  const [other, setOther] = useState("");
   const [area, setArea] = useState<RouteKey>("fast");
   const [txt, setTxt] = useState("");
   const [busy, setBusy] = useState(false);
@@ -289,10 +290,12 @@ function Reports({ reps, live, signedIn, isMod, msg, setMsg }: { reps: Report[];
   const submit = async () => {
     const clean = sanitize(txt);
     if (!clean) return setMsg("Add a short description first.");
+    const o = sanitize(other).slice(0, 60);
+    if (cat === "Other" && o.length < 2) return setMsg("Describe the problem type in a few words.");
     if (left < 1) return setMsg("Rate limit reached. Try again in an hour.");
-    setBusy(true); const err = await live.submit(cat, area, clean); setBusy(false);
+    setBusy(true); const err = await live.submit((cat === "Other" ? `Other: ${o}` : cat) as Category, area, clean); setBusy(false);
     if (err) return setMsg(err);
-    setTxt(""); setMsg("Report submitted for moderation. Everyone sees it instantly; it counts toward scores once verified.");
+    setTxt(""); setOther(""); setMsg("Report submitted for moderation. Everyone sees it instantly; it counts toward scores once verified.");
   };
   const setSt = async (id: string, st: "verified" | "rejected") => { const e = await live.moderate(id, st); if (e) setMsg(e); };
   return (
@@ -302,7 +305,8 @@ function Reports({ reps, live, signedIn, isMod, msg, setMsg }: { reps: Report[];
         <p className="mu">Reports are moderated before they affect route scores, and sync live across devices. {signedIn ? `Rate limit: ${left} of 3 reports left this hour.` : ""}</p>
         {!signedIn && <p className="note"><Link to="/auth">Sign in</Link> to submit a report.</p>}
         <label htmlFor="rc">Type</label>
-        <select id="rc" value={cat} onChange={(e) => setCat(e.target.value as Category)}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select>
+        <select id="rc" value={cat} onChange={(e) => setCat(e.target.value)}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}<option value="Other">Other (describe your own)</option></select>
+        {cat === "Other" && <><label htmlFor="ro">What kind of problem?</label><input id="ro" className="inp" value={other} onChange={(e) => setOther(e.target.value)} maxLength={60} placeholder="e.g. Stray dogs, Waterlogging, Open drain" /></>}
         <label htmlFor="ra">Where</label>
         <select id="ra" value={area} onChange={(e) => setArea(e.target.value as RouteKey)}>{ROUTE_KEYS.map((k) => <option key={k} value={k}>{ROUTES[k].a}</option>)}</select>
         <label htmlFor="rt">Details</label>
