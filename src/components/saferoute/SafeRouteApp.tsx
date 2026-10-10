@@ -205,7 +205,7 @@ export function SafeRouteApp() {
               : "sent" in sos ? (<>
                 <div className="note" style={{ textAlign: "left" }} role="alert"><b>Alert sent.</b> Contacts and campus security can see your live location.<br />If you are in danger, call your local emergency number now (112 in India). Move toward the nearest lit, staffed place or help point.</div>
                 <a className="btn d call112" href="tel:112">Call 112 now (emergency)</a>
-                <DistressLinks contacts={picked} where={here ?? geo} shareId={shareId} geoState={sosGeo} name={user?.user_metadata?.["full_name"] || user?.email?.split("@")[0] || ""} trip={`${TRIP.from} → ${TRIP.to}`} signedIn={!!user} onRetry={() => { stopSosLocation(); startSosLocation(); }} />
+                <DistressLinks contacts={picked} where={here ?? geo} shareId={shareId} geoState={sosGeo} name={user?.user_metadata?.["full_name"] || user?.email?.split("@")[0] || ""} trip={`${TRIP.from} → ${TRIP.to}`} signedIn={!!user} autoSend onRetry={() => { stopSosLocation(); startSosLocation(); }} />
                 <button className="btn o" onClick={() => { stopSosLocation(); setSos(null); note("SOS ended. Location sharing stopped."); }}>Stop sharing and end SOS</button>
               </>) : (<>
                 <button className="sos" disabled aria-live="assertive">{sos.n}</button>
@@ -439,7 +439,8 @@ function TripBar({ signedIn, onPlanned }: { signedIn: boolean; onPlanned: () => 
 }
 
 /** Free distress actions using the phone's own dialer and SMS app — no paid calling service needed. */
-function DistressLinks({ contacts, where, shareId, geoState, name, trip, signedIn, onRetry }: {
+function DistressLinks({ contacts, where, shareId, geoState, name, trip, signedIn, onRetry, autoSend = false }: {
+  autoSend?: boolean;
   contacts: { id: string; name: string; phone: string | null }[]; where: { lat: number; lng: number; acc?: number; at?: number } | null;
   shareId: string | null; geoState: "asking" | "live" | "denied" | "unsupported"; name: string; trip: string; signedIn: boolean; onRetry: () => void;
 }) {
@@ -458,6 +459,17 @@ function DistressLinks({ contacts, where, shareId, geoState, name, trip, signedI
   ].filter(Boolean).join("\n");
   const body = encodeURIComponent(text);
   const all = withPhone.map((c) => num(c.phone!)).join(",");
+  // SOS: open the messaging app once, addressed to all contacts, as soon as location is known (or after 4s).
+  const sentOnce = useRef(false);
+  const [autoOpened, setAutoOpened] = useState(false);
+  const smsAll = all ? `sms:${all}?body=${body}` : "";
+  const ready = geoState !== "asking" && (!signedIn || !!shareId);
+  const [waited, setWaited] = useState(false);
+  useEffect(() => { if (!autoSend) return; const tm = setTimeout(() => setWaited(true), 4000); return () => clearTimeout(tm); }, [autoSend]);
+  useEffect(() => {
+    if (!autoSend || sentOnce.current || !smsAll || !(ready || waited)) return;
+    sentOnce.current = true; setAutoOpened(true); window.location.href = smsAll;
+  }, [autoSend, smsAll, ready, waited]);
   const geoMsg = { asking: "Getting your location…", live: `Location on: ${coords}${where?.acc ? ` (±${where.acc} m)` : ""}`, denied: "Location access was blocked. Allow location for this site in your browser settings, then retry.", unsupported: "This device can't share location." }[geoState];
   return (
     <div className="distress">
@@ -467,7 +479,9 @@ function DistressLinks({ contacts, where, shareId, geoState, name, trip, signedI
         {liveLink ? <><br />Live link: <a href={liveLink} target="_blank" rel="noreferrer">{liveLink}</a></> : !signedIn ? <><br />Sign in to include a live location link.</> : null}
       </div>
       {!withPhone.length && <p className="mu">Add phone numbers to your selected trusted contacts to call or text them from here.</p>}
-      {withPhone.length > 1 && <a className="btn d" href={`sms:${all}?body=${body}`}>SMS location to all {withPhone.length} contacts</a>}
+      {autoSend && autoOpened && <p className="note" role="status">Your messaging app opened with the SOS text to all {withPhone.length} contact{withPhone.length > 1 ? "s" : ""}. Tap <b>Send</b> there.</p>}
+      {autoSend && !autoOpened && withPhone.length > 0 && <p className="mu" role="status">Opening your messaging app with your location…</p>}
+      {withPhone.length > 0 && <a className="btn d" href={smsAll}>{autoSend ? "Open SOS text again" : `SMS location to all ${withPhone.length} contacts`}</a>}
       {withPhone.map((c) => (
         <div key={c.id} className="row" style={{ alignItems: "center", margin: "4px 0" }}>
           <b style={{ flex: 1 }}>{c.name}</b>
